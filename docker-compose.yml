@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  backend:
+    build: 
+      context: . 
+      dockerfile: dockerfiles/dev/django/Dockerfile
+    container_name: backend
+    command: >
+      sh -c "python3 manage.py makemigrations &&
+              python3 manage.py collectstatic --noinput &&
+              python3 manage.py migrate &&
+              python3 manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./core:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./envs/dev/django/.env
+    depends_on:
+      - db
+
+  db:
+    container_name: db
+    image: postgres:13-alpine
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    env_file:
+      - envs/dev/db/.env
+    restart: always
+
+  elasticsearch:
+    container_name: elastic-container
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.4
+    environment:
+      - cluster.name=elastic-cluster
+      - xpack.security.enabled=false
+      - "discovery.type=single-node"
+    volumes:
+      - esdata:/share/elasticsearch/data
+      - ./elasticsearch.yml:/share/elasticsearch/config/elasticsearch.yml
+    networks:
+      - ek-net
+    ports:
+      - 9200:9200
+
+  kibana:
+    container_name: kibana-container
+    image: docker.elastic.co/kibana/kibana:7.13.4
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elastic-container:9200
+    volumes:
+      - ./kibana.yml:/share/kibana/config/kibana.yml
+    networks:
+      - ek-net
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5601:5601
+  
+volumes:
+  postgres_data:
+  esdata:
+  
+networks:
+  ek-net:
+    driver: bridge
